@@ -1,34 +1,68 @@
-import net from "node:net";
+import {
+  createServer,
+  type Server,
+  type Socket
+} from "node:net";
 
 import { ClientConnection } from "./client-connection.js";
+import { ConnectionManager } from "./connection-manager.js";
 
-const HOST = "0.0.0.0";
-const PORT = 5000;
+export class TcpServer {
+  private readonly server: Server;
 
-const clients = new Set<ClientConnection>();
+  private readonly connectionManager =
+    new ConnectionManager();
 
-const server = net.createServer((socket) => {
-  const client = new ClientConnection(socket);
+  constructor(
+    private readonly port: number
+  ) {
+    this.server = createServer((socket) => {
+      this.handleConnection(socket);
+    });
+  }
 
-  clients.add(client);
+  start(): void {
+    this.server.listen(
+      this.port,
+      () => {
+        console.log(
+          `Servidor TCP iniciado na porta ${this.port}.`
+        );
+      }
+    );
 
-  console.log(
-    `Cliente conectado: ${socket.remoteAddress}:${socket.remotePort}`
-  );
+    this.server.on("error", (error) => {
+      console.error(
+        "Erro no servidor:",
+        error.message
+      );
+    });
+  }
 
-  socket.on("close", () => {
-    clients.delete(client);
+  stop(): void {
+    this.server.close(() => {
+      console.log(
+        "Servidor TCP encerrado."
+      );
+    });
+  }
 
-    console.log(`Clientes conectados: ${clients.size}`);
-  });
+  getConnectionManager(): ConnectionManager {
+    return this.connectionManager;
+  }
 
-  console.log(`Clientes conectados: ${clients.size}`);
-});
+  private handleConnection(
+    socket: Socket
+  ): void {
+    const connection = new ClientConnection(
+      socket,
+      this.connectionManager
+    );
 
-server.listen(PORT, HOST, () => {
-  console.log(`TCP Server iniciado em ${HOST}:${PORT}`);
-});
+    this.connectionManager.add(connection);
 
-server.on("error", (error) => {
-  console.error("Erro no servidor:", error);
-});
+    console.log(
+      `Novo cliente conectado: ${socket.remoteAddress}:${socket.remotePort}`
+    );
+  }
+}
