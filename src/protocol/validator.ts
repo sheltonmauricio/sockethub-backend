@@ -97,6 +97,10 @@ const requestSchema = z.discriminatedUnion("type", [
 
   z.object({
     type: z.literal(MessageType.PING)
+  }),
+
+  z.object({
+    type: z.literal(MessageType.PONG)
   })
 ]);
 

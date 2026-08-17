@@ -21,6 +21,12 @@ export class ClientConnection {
   private authenticatedUser: AuthenticatedUser | null =
     null;
 
+  private static readonly HEARTBEAT_INTERVAL = 10_000;
+  private static readonly HEARTBEAT_TIMEOUT = 30_000;
+
+  private heartbeatInterval?: NodeJS.Timeout;
+  private lastPongAt = Date.now();
+
   constructor(
     private readonly socket: Socket,
     private readonly connectionManager: ConnectionManager
@@ -32,6 +38,7 @@ export class ClientConnection {
       );
 
     this.setupSocket();
+    this.startHeartbeat();
   }
 
   private setupSocket(): void {
@@ -42,6 +49,8 @@ export class ClientConnection {
     this.socket.on("close", () => {
       console.log("Cliente desconectado.");
 
+      this.stopHeartbeat();
+
       this.connectionManager.remove(this);
     });
 
@@ -51,6 +60,46 @@ export class ClientConnection {
         error.message
       );
     });
+  }
+
+  private startHeartbeat(): void {
+    this.lastPongAt = Date.now();
+
+    this.heartbeatInterval = setInterval(() => {
+      if (this.socket.destroyed) {
+        return;
+      }
+
+      const elapsed =
+        Date.now() - this.lastPongAt;
+
+      if (
+        elapsed > ClientConnection.HEARTBEAT_TIMEOUT
+      ) {
+        console.log(
+          "Heartbeat expirado. Encerrando conexão."
+        );
+
+        this.socket.destroy();
+
+        return;
+      }
+
+      this.send({
+        type: MessageType.PING
+      });
+    }, ClientConnection.HEARTBEAT_INTERVAL);
+  }
+
+  handlePong(): void {
+    this.lastPongAt = Date.now();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
   }
 
   private async handleData(

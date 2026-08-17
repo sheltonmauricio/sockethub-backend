@@ -39,6 +39,8 @@ export interface ClientContext {
   unregisterAuthenticatedUser(): void;
 
   send(message: unknown): void;
+
+  handlePong(): void;
 }
 
 export class MessageDispatcher {
@@ -138,6 +140,10 @@ export class MessageDispatcher {
 
       case MessageType.PING:
         this.handlePing();
+        break;
+
+      case MessageType.PONG:
+        this.handlePong();
         break;
 
       default:
@@ -611,6 +617,10 @@ export class MessageDispatcher {
     this.client.send({
       type: MessageType.PONG
     });
+  }
+
+  private handlePong(): void {
+    this.client.handlePong();
   }
 
   private requireAuthentication(
