@@ -33,6 +33,9 @@ let lastPongAt = Date.now();
 let intentionalDisconnect = false;
 let reconnecting = false;
 
+let authenticatedUsername: string | null = null;
+let authenticatedPassword: string | null = null;
+
 const rl = createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -67,7 +70,25 @@ function connect(): void {
 
       startHeartbeat();
 
-      printHelp();
+      /*
+       * Se existia uma sessão antes da queda,
+       * tenta restaurá-la automaticamente.
+       */
+      if (
+        authenticatedUsername &&
+        authenticatedPassword
+      ) {
+        console.log(
+          `Restaurando sessão de "${authenticatedUsername}"...`
+        );
+
+        sendLogin(
+          authenticatedUsername,
+          authenticatedPassword
+        );
+      } else {
+        printHelp();
+      }
 
       rl.prompt();
     }
@@ -92,7 +113,10 @@ function setupSocket(): void {
           lastPongAt = Date.now();
 
           if (heartbeatTimeout) {
-            clearTimeout(heartbeatTimeout);
+            clearTimeout(
+              heartbeatTimeout
+            );
+
             heartbeatTimeout = null;
           }
 
@@ -339,6 +363,20 @@ function send(
   );
 }
 
+function sendLogin(
+  username: string,
+  password: string
+): void {
+  send({
+    type: MessageType.LOGIN,
+    requestId: randomUUID(),
+    payload: {
+      username,
+      password
+    }
+  });
+}
+
 function handleLogin(
   parts: string[]
 ): void {
@@ -353,14 +391,13 @@ function handleLogin(
     return;
   }
 
-  send({
-    type: MessageType.LOGIN,
-    requestId: randomUUID(),
-    payload: {
-      username,
-      password
-    }
-  });
+  authenticatedUsername = username;
+  authenticatedPassword = password;
+
+  sendLogin(
+    username,
+    password
+  );
 }
 
 function handleGetGroups(): void {
@@ -495,6 +532,13 @@ function handleLogout(): void {
     requestId: randomUUID(),
     payload: {}
   });
+
+  /*
+   * Não devemos restaurar automaticamente
+   * uma sessão que foi encerrada pelo usuário.
+   */
+  authenticatedUsername = null;
+  authenticatedPassword = null;
 }
 
 function handlePing(): void {
