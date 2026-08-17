@@ -1,10 +1,18 @@
 import { MessageType } from "../protocol/message-types.js";
 import type {
+  CreateGroupRequest,
+  GroupRequest,
+  GetGroupsRequest,
   LoginRequest,
+  MemberRequest,
   ProtocolMessage
 } from "../protocol/messages.js";
+
 import { AuthService } from "../services/auth-service.js";
+import { GroupService } from "../services/group-service.js";
+
 import { UserRepository } from "../repositories/user-repository.js";
+import { GroupRepository } from "../repositories/group-repository.js";
 
 export interface ClientContext {
   getUser(): {
@@ -33,6 +41,12 @@ export class MessageDispatcher {
   private readonly authService =
     new AuthService(this.userRepository);
 
+  private readonly groupRepository =
+    new GroupRepository();
+
+  private readonly groupService =
+    new GroupService(this.groupRepository);
+
   constructor(
     private readonly client: ClientContext
   ) {}
@@ -48,7 +62,49 @@ export class MessageDispatcher {
         break;
 
       case MessageType.LOGOUT:
-        this.handleLogout();
+        this.handleLogout(message);
+        break;
+
+      case MessageType.GET_GROUPS:
+        this.handleGetGroups(
+          message as GetGroupsRequest
+        );
+        break;
+
+      case MessageType.CREATE_GROUP:
+        this.handleCreateGroup(
+          message as CreateGroupRequest
+        );
+        break;
+
+      case MessageType.DELETE_GROUP:
+        this.handleDeleteGroup(
+          message as GroupRequest
+        );
+        break;
+
+      case MessageType.JOIN_GROUP:
+        this.handleJoinGroup(
+          message as GroupRequest
+        );
+        break;
+
+      case MessageType.LEAVE_GROUP:
+        this.handleLeaveGroup(
+          message as GroupRequest
+        );
+        break;
+
+      case MessageType.ADD_MEMBER:
+        this.handleAddMember(
+          message as MemberRequest
+        );
+        break;
+
+      case MessageType.REMOVE_MEMBER:
+        this.handleRemoveMember(
+          message as MemberRequest
+        );
         break;
 
       case MessageType.PING:
@@ -64,16 +120,12 @@ export class MessageDispatcher {
     message: LoginRequest
   ): Promise<void> {
     if (this.client.getUser()) {
-      this.client.send({
-        type: MessageType.LOGIN_RESPONSE,
-        requestId: message.requestId,
-        success: false,
-        error: {
-          code: "ALREADY_AUTHENTICATED",
-          message:
-            "O cliente já está autenticado."
-        }
-      });
+      this.sendError(
+        MessageType.LOGIN_RESPONSE,
+        message.requestId,
+        "ALREADY_AUTHENTICATED",
+        "O cliente já está autenticado."
+      );
 
       return;
     }
@@ -85,16 +137,12 @@ export class MessageDispatcher {
       );
 
     if (!user) {
-      this.client.send({
-        type: MessageType.LOGIN_RESPONSE,
-        requestId: message.requestId,
-        success: false,
-        error: {
-          code: "INVALID_CREDENTIALS",
-          message:
-            "Username ou password inválidos."
-        }
-      });
+      this.sendError(
+        MessageType.LOGIN_RESPONSE,
+        message.requestId,
+        "INVALID_CREDENTIALS",
+        "Username ou password inválidos."
+      );
 
       return;
     }
@@ -112,16 +160,12 @@ export class MessageDispatcher {
     if (!registered) {
       this.client.setUser(null);
 
-      this.client.send({
-        type: MessageType.LOGIN_RESPONSE,
-        requestId: message.requestId,
-        success: false,
-        error: {
-          code: "USER_ALREADY_CONNECTED",
-          message:
-            "Este usuário já possui uma conexão ativa."
-        }
-      });
+      this.sendError(
+        MessageType.LOGIN_RESPONSE,
+        message.requestId,
+        "USER_ALREADY_CONNECTED",
+        "Este usuário já possui uma conexão ativa."
+      );
 
       return;
     }
@@ -140,20 +184,344 @@ export class MessageDispatcher {
     );
   }
 
-  private handleLogout(): void {
+  private handleLogout(
+    message: ProtocolMessage
+  ): void {
     if (!this.client.getUser()) {
+      this.sendError(
+        MessageType.LOGOUT_RESPONSE,
+        "requestId" in message
+          ? message.requestId
+          : undefined,
+        "NOT_AUTHENTICATED",
+        "O cliente não está autenticado."
+      );
+
       return;
     }
 
     this.client.unregisterAuthenticatedUser();
     this.client.setUser(null);
 
-    console.log("Usuário terminou a sessão.");
+    this.client.send({
+      type: MessageType.LOGOUT_RESPONSE,
+      requestId:
+        "requestId" in message
+          ? message.requestId
+          : undefined,
+      success: true
+    });
+
+    console.log(
+      "Usuário terminou a sessão."
+    );
+  }
+
+  private handleGetGroups(
+    message: GetGroupsRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    const groups = this.groupService.getGroups();
+
+    const summaries = groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      role:
+        group.ownerId === user.id
+          ? "OWNER" as const
+          : this.groupService.isMember(
+              group.id,
+              user.id
+            )
+            ? "MEMBER" as const
+            : null
+    }));
+
+    this.client.send({
+      type: MessageType.GET_GROUPS_RESPONSE,
+      requestId: message.requestId,
+      success: true,
+      payload: {
+        groups: summaries
+      }
+    });
+  }
+
+  private handleCreateGroup(
+    message: CreateGroupRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const group =
+        this.groupService.createGroup(
+          message.payload.name,
+          user.id
+        );
+
+      this.client.send({
+        type: MessageType.CREATE_GROUP_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          group: {
+            id: group.id,
+            name: group.name,
+            ownerId: group.ownerId
+          }
+        }
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.CREATE_GROUP_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleDeleteGroup(
+    message: GroupRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      this.groupService.deleteGroup(
+        message.payload.groupId,
+        user.id
+      );
+
+      this.client.send({
+        type: MessageType.DELETE_GROUP_RESPONSE,
+        requestId: message.requestId,
+        success: true
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.DELETE_GROUP_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleJoinGroup(
+    message: GroupRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const group =
+        this.groupService.joinGroup(
+          message.payload.groupId,
+          user.id
+        );
+
+      this.client.send({
+        type: MessageType.JOIN_GROUP_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          group: {
+            id: group.id,
+            name: group.name,
+            ownerId: group.ownerId
+          }
+        }
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.JOIN_GROUP_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleLeaveGroup(
+    message: GroupRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      this.groupService.leaveGroup(
+        message.payload.groupId,
+        user.id
+      );
+
+      this.client.send({
+        type: MessageType.LEAVE_GROUP_RESPONSE,
+        requestId: message.requestId,
+        success: true
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.LEAVE_GROUP_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleAddMember(
+    message: MemberRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      this.groupService.addMember(
+        message.payload.groupId,
+        user.id,
+        message.payload.userId
+      );
+
+      this.client.send({
+        type: MessageType.ADD_MEMBER_RESPONSE,
+        requestId: message.requestId,
+        success: true
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.ADD_MEMBER_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleRemoveMember(
+    message: MemberRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      this.groupService.removeMember(
+        message.payload.groupId,
+        user.id,
+        message.payload.userId
+      );
+
+      this.client.send({
+        type: MessageType.REMOVE_MEMBER_RESPONSE,
+        requestId: message.requestId,
+        success: true
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.REMOVE_MEMBER_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
   }
 
   private handlePing(): void {
     this.client.send({
       type: MessageType.PONG
+    });
+  }
+
+  private requireAuthentication(
+    message: ProtocolMessage
+  ): {
+    id: number;
+    username: string;
+  } | null {
+    const user = this.client.getUser();
+
+    if (!user) {
+      this.sendError(
+        MessageType.ERROR,
+        "requestId" in message
+          ? message.requestId
+          : undefined,
+        "NOT_AUTHENTICATED",
+        "É necessário estar autenticado para realizar esta operação."
+      );
+
+      return null;
+    }
+
+    return user;
+  }
+
+  private sendServiceError(
+    type: MessageType,
+    requestId: string,
+    error: unknown
+  ): void {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Ocorreu um erro ao processar a operação.";
+
+    this.sendError(
+      type,
+      requestId,
+      "OPERATION_FAILED",
+      message
+    );
+  }
+
+  private sendError(
+    type: MessageType,
+    requestId: string | undefined,
+    code: string,
+    message: string
+  ): void {
+    this.client.send({
+      type,
+      ...(requestId !== undefined && {
+        requestId
+      }),
+      success: false,
+      error: {
+        code,
+        message
+      }
     });
   }
 

@@ -19,7 +19,7 @@ export interface Group {
 export interface GroupSummary {
   id: number;
   name: string;
-  role: "OWNER" | "MEMBER";
+  role: "OWNER" | "MEMBER" | null;
 }
 
 export interface ChatMessage {
@@ -87,6 +87,8 @@ export interface ErrorMessage {
 export type LoginRequest = RequestMessage<LoginPayload>;
 
 export type CreateGroupRequest = RequestMessage<CreateGroupPayload>;
+
+export type GetGroupsRequest = RequestMessage<Record<string, never>>;
 
 export type GroupRequest = RequestMessage<GroupIdPayload>;
 

@@ -35,6 +35,14 @@ const requestSchema = z.discriminatedUnion("type", [
   }),
 
   z.object({
+    type: z.literal(MessageType.DELETE_GROUP),
+    requestId: z.string().min(1),
+    payload: z.object({
+      groupId: z.number().int().positive()
+    })
+  }),
+
+  z.object({
     type: z.literal(MessageType.JOIN_GROUP),
     requestId: z.string().min(1),
     payload: z.object({
