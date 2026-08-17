@@ -25,7 +25,11 @@ export class ClientConnection {
     private readonly socket: Socket,
     private readonly connectionManager: ConnectionManager
   ) {
-    this.dispatcher = new MessageDispatcher(this);
+    this.dispatcher = 
+      new MessageDispatcher(
+        this,
+        this.connectionManager
+      );
 
     this.setupSocket();
   }

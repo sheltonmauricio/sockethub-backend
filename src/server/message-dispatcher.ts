@@ -1,18 +1,25 @@
 import { MessageType } from "../protocol/message-types.js";
+
 import type {
   CreateGroupRequest,
-  GroupRequest,
   GetGroupsRequest,
+  GetMessagesRequest,
+  GroupRequest,
   LoginRequest,
   MemberRequest,
-  ProtocolMessage
+  ProtocolMessage,
+  ChatMessage,
+  SendMessageRequest
 } from "../protocol/messages.js";
 
 import { AuthService } from "../services/auth-service.js";
 import { GroupService } from "../services/group-service.js";
+import { MessageService } from "../services/message-service.js";
 
 import { UserRepository } from "../repositories/user-repository.js";
 import { GroupRepository } from "../repositories/group-repository.js";
+import { MessageRepository } from "../repositories/message-repository.js";
+import { ConnectionManager } from "./connection-manager.js";
 
 export interface ClientContext {
   getUser(): {
@@ -47,8 +54,18 @@ export class MessageDispatcher {
   private readonly groupService =
     new GroupService(this.groupRepository);
 
+  private readonly messageRepository =
+    new MessageRepository();
+
+  private readonly messageService =
+    new MessageService(
+      this.messageRepository,
+      this.groupRepository
+    );
+
   constructor(
-    private readonly client: ClientContext
+    private readonly client: ClientContext,
+    private readonly connectionManager: ConnectionManager
   ) {}
 
   async dispatch(
@@ -104,6 +121,18 @@ export class MessageDispatcher {
       case MessageType.REMOVE_MEMBER:
         this.handleRemoveMember(
           message as MemberRequest
+        );
+        break;
+
+      case MessageType.GET_MESSAGES:
+        this.handleGetMessages(
+          message as GetMessagesRequest
+        );
+        break;
+
+      case MessageType.SEND_MESSAGE:
+        this.handleSendMessage(
+          message as SendMessageRequest
         );
         break;
 
@@ -228,7 +257,8 @@ export class MessageDispatcher {
       return;
     }
 
-    const groups = this.groupService.getGroups();
+    const groups =
+      this.groupService.getGroups();
 
     const summaries = groups.map((group) => ({
       id: group.id,
@@ -452,6 +482,125 @@ export class MessageDispatcher {
     } catch (error) {
       this.sendServiceError(
         MessageType.REMOVE_MEMBER_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleGetMessages(
+    message: GetMessagesRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const messages =
+        this.messageService.getMessages(
+          message.payload.groupId,
+          user.id,
+          message.payload.limit,
+          message.payload.offset
+        );
+
+      const chatMessages =
+        messages.map((item) => ({
+          id: item.id,
+          groupId: item.groupId,
+          sender: {
+            id: item.userId,
+            username: item.username
+          },
+          content: item.content,
+          createdAt: item.createdAt
+        }));
+
+      this.client.send({
+        type: MessageType.GET_MESSAGES_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          messages: chatMessages,
+          hasMore:
+            messages.length ===
+            message.payload.limit
+        }
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.GET_MESSAGES_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleSendMessage(
+    message: SendMessageRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const created =
+        this.messageService.sendMessage(
+          message.payload.groupId,
+          user.id,
+          message.payload.content
+        );
+
+      this.client.send({
+        type: MessageType.SEND_MESSAGE_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          messageId: created.id
+        }
+      });
+
+      const members =
+        this.groupService.getMembers(
+          message.payload.groupId
+        );
+
+      const newMessage: ChatMessage = {
+        id: created.id,
+        groupId: created.groupId,
+        sender: {
+          id: created.userId,
+          username: created.username
+        },
+        content: created.content,
+        createdAt: created.createdAt
+      };
+
+      const userIds = members.map(
+        (member) => member.userId
+      );
+
+      this.connectionManager.broadcastToUsers(
+        userIds,
+        {
+          type: MessageType.NEW_MESSAGE,
+          payload: {
+            message: newMessage
+          }
+        },
+        this.client
+      );
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.SEND_MESSAGE_RESPONSE,
         message.requestId,
         error
       );

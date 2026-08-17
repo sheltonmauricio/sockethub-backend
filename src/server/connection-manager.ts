@@ -1,7 +1,12 @@
 import type { ClientConnection } from "./client-connection.js";
 
+export interface BroadcastClient {
+  send(message: unknown): void;
+}
+
 export class ConnectionManager {
-  private readonly connections = new Set<ClientConnection>();
+  private readonly connections =
+    new Set<ClientConnection>();
 
   private readonly userConnections =
     new Map<number, ClientConnection>();
@@ -73,15 +78,37 @@ export class ConnectionManager {
   }
 
   getAuthenticated(): ClientConnection[] {
-    return [...this.userConnections.values()];
+    return [
+      ...this.userConnections.values()
+    ];
   }
 
   broadcast(
     message: unknown,
     exclude?: ClientConnection
   ): void {
-    for (const connection of this.userConnections.values()) {
+    for (
+      const connection
+      of this.userConnections.values()
+    ) {
       if (connection === exclude) {
+        continue;
+      }
+
+      connection.send(message);
+    }
+  }
+
+  broadcastToUsers(
+    userIds: number[],
+    message: unknown,
+    exclude?: BroadcastClient
+  ): void {
+    for (const userId of userIds) {
+      const connection =
+        this.userConnections.get(userId);
+
+      if (!connection || connection === exclude) {
         continue;
       }
 
