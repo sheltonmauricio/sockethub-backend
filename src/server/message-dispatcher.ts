@@ -349,8 +349,12 @@ export class MessageDispatcher {
       this.client.send({
         type: MessageType.DELETE_GROUP_RESPONSE,
         requestId: message.requestId,
-        success: true
+        success: true,
+        payload: {
+          groupId: message.payload.groupId
+        }
       });
+      
     } catch (error) {
       this.sendServiceError(
         MessageType.DELETE_GROUP_RESPONSE,
