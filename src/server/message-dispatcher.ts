@@ -601,8 +601,7 @@ export class MessageDispatcher {
           payload: {
             message: newMessage
           }
-        },
-        this.client
+        }
       );
     } catch (error) {
       this.sendServiceError(
