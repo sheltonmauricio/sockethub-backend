@@ -24,6 +24,7 @@ export class TcpServer {
   start(): void {
     this.server.listen(
       this.port,
+      "0.0.0.0",
       () => {
         console.log(
           `Servidor TCP iniciado na porta ${this.port}.`
