@@ -135,45 +135,6 @@ export class GroupService {
     );
   }
 
-  addMember(
-    groupId: number,
-    ownerId: number,
-    userId: number
-  ): void {
-    const group =
-      this.groupRepository.findById(
-        groupId
-      );
-
-    if (!group) {
-      throw new Error(
-        "Grupo não encontrado."
-      );
-    }
-
-    if (group.ownerId !== ownerId) {
-      throw new Error(
-        "Apenas o proprietário pode adicionar membros."
-      );
-    }
-
-    if (
-      this.groupRepository.isMember(
-        groupId,
-        userId
-      )
-    ) {
-      throw new Error(
-        "O usuário já pertence ao grupo."
-      );
-    }
-
-    this.groupRepository.addMember(
-      groupId,
-      userId
-    );
-  }
-
   removeMember(
     groupId: number,
     ownerId: number,

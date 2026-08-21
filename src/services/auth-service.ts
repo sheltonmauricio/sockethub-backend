@@ -20,6 +20,53 @@ export class AuthService {
     private readonly userRepository: UserRepository
   ) {}
 
+  async register(
+    username: string,
+    password: string
+  ): Promise<UserRecord> {
+    const normalizedUsername = username.trim();
+
+    if (!normalizedUsername) {
+      throw new Error(
+        "O username é obrigatório."
+      );
+    }
+
+    if (
+      normalizedUsername.length < 3 ||
+      normalizedUsername.length > 30
+    ) {
+      throw new Error(
+        "O username deve ter entre 3 e 30 caracteres."
+      );
+    }
+
+    if (password.length < 6) {
+      throw new Error(
+        "A password deve ter pelo menos 6 caracteres."
+      );
+    }
+
+    const existingUser =
+      this.userRepository.findByUsername(
+        normalizedUsername
+      );
+
+    if (existingUser) {
+      throw new Error(
+        "O username já está em uso."
+      );
+    }
+
+    const passwordHash =
+      await this.hashPassword(password);
+
+    return this.userRepository.create(
+      normalizedUsername,
+      passwordHash
+    );
+  }
+
   async verifyCredentials(
     username: string,
     password: string

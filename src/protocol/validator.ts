@@ -6,6 +6,15 @@ import { ProtocolError } from "./protocol-error.js";
 
 const requestSchema = z.discriminatedUnion("type", [
   z.object({
+    type: z.literal(MessageType.REGISTER),
+    requestId: z.string().min(1),
+    payload: z.object({
+      username: z.string().min(3).max(30),
+      password: z.string().min(6)
+    })
+  }),
+  
+  z.object({
     type: z.literal(MessageType.LOGIN),
     requestId: z.string().min(1),
     payload: z.object({

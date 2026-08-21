@@ -10,7 +10,8 @@ import type {
   MemberRequest,
   ProtocolMessage,
   ChatMessage,
-  SendMessageRequest
+  SendMessageRequest,
+  RegisterRequest
 } from "../protocol/messages.js";
 
 import { AuthService } from "../services/auth-service.js";
@@ -78,6 +79,12 @@ export class MessageDispatcher {
       case MessageType.LOGIN:
         await this.handleLogin(
           message as LoginRequest
+        );
+        break;
+
+      case MessageType.REGISTER:
+        await this.handleRegister(
+          message as RegisterRequest
         );
         break;
 
@@ -218,6 +225,40 @@ export class MessageDispatcher {
     console.log(
       `Usuário autenticado: ${user.username}`
     );
+  }
+
+  private async handleRegister(
+    message: RegisterRequest
+  ): Promise<void> {
+    try {
+      const user =
+        await this.authService.register(
+          message.payload.username,
+          message.payload.password
+        );
+
+      this.client.send({
+        type: MessageType.REGISTER_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          user: {
+            id: user.id,
+            username: user.username
+          }
+        }
+      });
+
+      console.log(
+        `Novo usuário registrado: ${user.username}`
+      );
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.REGISTER_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
   }
 
   private handleLogout(
@@ -435,9 +476,32 @@ export class MessageDispatcher {
     }
 
     try {
+      const members =
+        this.groupService.getMembers(
+          message.payload.groupId
+        );
+
       this.groupService.leaveGroup(
         message.payload.groupId,
         user.id
+      );
+
+      const remainingUserIds =
+        members
+          .map((member) => member.id)
+          .filter(
+            (userId) => userId !== user.id
+          );
+
+      this.connectionManager.broadcastToUsers(
+        remainingUserIds,
+        {
+          type: MessageType.MEMBER_REMOVED,
+          payload: {
+            groupId: message.payload.groupId,
+            userId: user.id
+          }
+        }
       );
 
       this.client.send({
@@ -472,8 +536,18 @@ export class MessageDispatcher {
         message.payload.userId
       );
 
+      const members =
+        this.groupService.getMembers(
+          message.payload.groupId
+        );
+
+      const affectedUserIds = [
+        ...members.map((member) => member.id),
+        message.payload.userId
+      ];
+
       this.connectionManager.broadcastToUsers(
-        [message.payload.userId],
+        affectedUserIds,
         {
           type: MessageType.MEMBER_REMOVED,
           payload: {

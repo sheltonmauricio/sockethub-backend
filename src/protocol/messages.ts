@@ -90,6 +90,13 @@ export interface ControlMessage {
     | MessageType.PONG;
 }
 
+export interface RegisterPayload {
+  username: string;
+  password: string;
+}
+
+
+
 export interface ErrorMessage {
   type: MessageType.ERROR;
   requestId?: string;
@@ -111,6 +118,12 @@ export type SendMessageRequest = RequestMessage<SendMessagePayload>;
 export type GetMessagesRequest = RequestMessage<GetMessagesPayload>;
 
 export type GetGroupMembersRequest =  RequestMessage<GroupIdPayload>;
+
+export type RegisterRequest =  RequestMessage<RegisterPayload>;
+
+export type RegisterResponse = ResponseMessage<{
+  user: User;
+}>;
 
 export type LoginResponse = ResponseMessage<{
   user: User;
