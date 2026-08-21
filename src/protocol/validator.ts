@@ -27,6 +27,16 @@ const requestSchema = z.discriminatedUnion("type", [
   }),
 
   z.object({
+    type: z.literal(
+      MessageType.GET_GROUP_MEMBERS
+    ),
+    requestId: z.string().min(1),
+    payload: z.object({
+      groupId: z.number().int().positive()
+    })
+  }),
+
+  z.object({
     type: z.literal(MessageType.CREATE_GROUP),
     requestId: z.string().min(1),
     payload: z.object({
@@ -55,15 +65,6 @@ const requestSchema = z.discriminatedUnion("type", [
     requestId: z.string().min(1),
     payload: z.object({
       groupId: z.number().int().positive()
-    })
-  }),
-
-  z.object({
-    type: z.literal(MessageType.ADD_MEMBER),
-    requestId: z.string().min(1),
-    payload: z.object({
-      groupId: z.number().int().positive(),
-      userId: z.number().int().positive()
     })
   }),
 

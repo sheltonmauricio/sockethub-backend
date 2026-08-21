@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "create-user": "tsx test/create-user.ts",
     "start": "tsx src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"

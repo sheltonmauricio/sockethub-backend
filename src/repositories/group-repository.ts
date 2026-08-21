@@ -8,8 +8,8 @@ export interface Group {
 }
 
 export interface GroupMember {
-  groupId: number;
-  userId: number;
+  id: number;
+  username: string;
   joinedAt: string;
 }
 
@@ -21,8 +21,8 @@ interface GroupRow {
 }
 
 interface GroupMemberRow {
-  group_id: number;
-  user_id: number;
+  id: number;
+  username: string;
   joined_at: string;
 }
 
@@ -158,18 +158,20 @@ export class GroupRepository {
     const rows = database
       .prepare(`
         SELECT
-          group_id,
-          user_id,
-          joined_at
-        FROM group_members
-        WHERE group_id = ?
-        ORDER BY joined_at ASC
+          u.id,
+          u.username,
+          gm.joined_at
+        FROM group_members gm
+        INNER JOIN users u
+          ON u.id = gm.user_id
+        WHERE gm.group_id = ?
+        ORDER BY gm.joined_at ASC
       `)
       .all(groupId) as GroupMemberRow[];
 
     return rows.map((row) => ({
-      groupId: row.group_id,
-      userId: row.user_id,
+      id: row.id,
+      username: row.username,
       joinedAt: row.joined_at
     }));
   }

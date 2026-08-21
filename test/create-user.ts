@@ -1,27 +1,42 @@
 import { AuthService } from "../src/services/auth-service.js";
 import { UserRepository } from "../src/repositories/user-repository.js";
 
-const repository = new UserRepository();
-const authService = new AuthService(repository);
+const [, , username, password] = process.argv;
 
-const username = "user2";
-const password = "user123";
+if (!username || !password) {
+  console.error(
+    "Uso: npm run create-user -- <username> <password>"
+  );
 
-const existingUser = repository.findByUsername(username);
-
-if (existingUser) {
-  console.log(`Usuário "${username}" já existe.`);
-  process.exit(0);
+  process.exit(1);
 }
 
-const passwordHash = await authService.hashPassword(password);
+const repository = new UserRepository();
+
+const authService = new AuthService(
+  repository
+);
+
+const existingUser =
+  repository.findByUsername(username);
+
+if (existingUser) {
+  console.error(
+    `Usuário "${username}" já existe.`
+  );
+
+  process.exit(1);
+}
+
+const passwordHash =
+  await authService.hashPassword(password);
 
 const user = repository.create(
   username,
   passwordHash
 );
 
-console.log("Usuário criado:");
+console.log("Usuário criado com sucesso:");
 console.log({
   id: user.id,
   username: user.username

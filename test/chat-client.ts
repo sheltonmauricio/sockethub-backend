@@ -277,10 +277,22 @@ function handleCommand(
       handleGetGroups();
       break;
 
+    case "members":
+      handleGetGroupMembers(parts);
+      break;
+    
+    case "remove":
+      handleRemoveMember(parts);
+      break;
+
     case "create":
       handleCreateGroup(
         parts.slice(1).join(" ")
       );
+      break;
+
+    case "delete":
+      handleDeleteGroup(parts);
       break;
 
     case "join":
@@ -408,6 +420,55 @@ function handleGetGroups(): void {
   });
 }
 
+function handleGetGroupMembers(
+  parts: string[]
+): void {
+  const groupId = Number(parts[1]);
+
+  if (!Number.isInteger(groupId)) {
+    console.log(
+      "Uso: members <groupId>"
+    );
+
+    return;
+  }
+
+  send({
+    type: MessageType.GET_GROUP_MEMBERS,
+    requestId: randomUUID(),
+    payload: {
+      groupId
+    }
+  });
+}
+
+function handleRemoveMember(
+  parts: string[]
+): void {
+  const groupId = Number(parts[1]);
+  const userId = Number(parts[2]);
+
+  if (
+    !Number.isInteger(groupId) ||
+    !Number.isInteger(userId)
+  ) {
+    console.log(
+      "Uso: remove <groupId> <userId>"
+    );
+
+    return;
+  }
+
+  send({
+    type: MessageType.REMOVE_MEMBER,
+    requestId: randomUUID(),
+    payload: {
+      groupId,
+      userId
+    }
+  });
+}
+
 function handleCreateGroup(
   name: string
 ): void {
@@ -424,6 +485,28 @@ function handleCreateGroup(
     requestId: randomUUID(),
     payload: {
       name
+    }
+  });
+}
+
+function handleDeleteGroup(
+  parts: string[]
+): void {
+  const groupId = Number(parts[1]);
+
+  if (!Number.isInteger(groupId)) {
+    console.log(
+      "Uso: delete <groupId>"
+    );
+
+    return;
+  }
+
+  send({
+    type: MessageType.DELETE_GROUP,
+    requestId: randomUUID(),
+    payload: {
+      groupId
     }
   });
 }
@@ -550,12 +633,14 @@ function handlePing(): void {
 function printHelp(): void {
   console.log(`
 Comandos disponíveis:
-
   login <username> <password>
   groups
+  members <groupId>
   create <nome>
   join <groupId>
   leave <groupId>
+  remove <groupId> <userId>
+  delete <groupId>
   send <groupId> <mensagem>
   messages <groupId>
   logout

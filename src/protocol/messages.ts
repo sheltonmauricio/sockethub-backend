@@ -22,6 +22,12 @@ export interface GroupSummary {
   role: "OWNER" | "MEMBER" | null;
 }
 
+export interface GroupMember {
+  id: number;
+  username: string;
+  joinedAt: string;
+}
+
 export interface ChatMessage {
   id: number;
   groupId: number;
@@ -78,6 +84,12 @@ export interface EventMessage<T = unknown> {
   payload: T;
 }
 
+export interface ControlMessage {
+  type:
+    | MessageType.PING
+    | MessageType.PONG;
+}
+
 export interface ErrorMessage {
   type: MessageType.ERROR;
   requestId?: string;
@@ -97,6 +109,8 @@ export type MemberRequest = RequestMessage<MemberPayload>;
 export type SendMessageRequest = RequestMessage<SendMessagePayload>;
 
 export type GetMessagesRequest = RequestMessage<GetMessagesPayload>;
+
+export type GetGroupMembersRequest =  RequestMessage<GroupIdPayload>;
 
 export type LoginResponse = ResponseMessage<{
   user: User;
@@ -119,12 +133,27 @@ export type SendMessageResponse = ResponseMessage<{
   messageId: number;
 }>;
 
+export type GetGroupMembersResponse =
+  ResponseMessage<{
+    members: GroupMember[];
+  }>;
+
 export type NewMessageEvent = EventMessage<{
   message: ChatMessage;
 }>;
 
-  export type ProtocolMessage =
+export type GroupDeletedEvent = EventMessage<{
+  groupId: number;
+}>;
+
+export type MemberRemovedEvent = EventMessage<{
+  groupId: number;
+  userId: number;
+}>;
+
+export type ProtocolMessage =
   | RequestMessage
   | ResponseMessage
   | EventMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | ControlMessage;

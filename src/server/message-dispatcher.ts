@@ -2,6 +2,7 @@ import { MessageType } from "../protocol/message-types.js";
 
 import type {
   CreateGroupRequest,
+  GetGroupMembersRequest,
   GetGroupsRequest,
   GetMessagesRequest,
   GroupRequest,
@@ -90,6 +91,12 @@ export class MessageDispatcher {
         );
         break;
 
+      case MessageType.GET_GROUP_MEMBERS:
+        this.handleGetGroupMembers(
+          message as GetGroupMembersRequest
+        );
+        break;
+
       case MessageType.CREATE_GROUP:
         this.handleCreateGroup(
           message as CreateGroupRequest
@@ -111,12 +118,6 @@ export class MessageDispatcher {
       case MessageType.LEAVE_GROUP:
         this.handleLeaveGroup(
           message as GroupRequest
-        );
-        break;
-
-      case MessageType.ADD_MEMBER:
-        this.handleAddMember(
-          message as MemberRequest
         );
         break;
 
@@ -341,9 +342,28 @@ export class MessageDispatcher {
     }
 
     try {
+      const members =
+        this.groupService.getMembers(
+          message.payload.groupId
+        );
+
       this.groupService.deleteGroup(
         message.payload.groupId,
         user.id
+      );
+
+      const userIds = members.map(
+        (member) => member.id
+      );
+
+      this.connectionManager.broadcastToUsers(
+        userIds,
+        {
+          type: MessageType.GROUP_DELETED,
+          payload: {
+            groupId: message.payload.groupId
+          }
+        }
       );
 
       this.client.send({
@@ -434,38 +454,6 @@ export class MessageDispatcher {
     }
   }
 
-  private handleAddMember(
-    message: MemberRequest
-  ): void {
-    const user = this.requireAuthentication(
-      message
-    );
-
-    if (!user) {
-      return;
-    }
-
-    try {
-      this.groupService.addMember(
-        message.payload.groupId,
-        user.id,
-        message.payload.userId
-      );
-
-      this.client.send({
-        type: MessageType.ADD_MEMBER_RESPONSE,
-        requestId: message.requestId,
-        success: true
-      });
-    } catch (error) {
-      this.sendServiceError(
-        MessageType.ADD_MEMBER_RESPONSE,
-        message.requestId,
-        error
-      );
-    }
-  }
-
   private handleRemoveMember(
     message: MemberRequest
   ): void {
@@ -484,6 +472,17 @@ export class MessageDispatcher {
         message.payload.userId
       );
 
+      this.connectionManager.broadcastToUsers(
+        [message.payload.userId],
+        {
+          type: MessageType.MEMBER_REMOVED,
+          payload: {
+            groupId: message.payload.groupId,
+            userId: message.payload.userId
+          }
+        }
+      );
+
       this.client.send({
         type: MessageType.REMOVE_MEMBER_RESPONSE,
         requestId: message.requestId,
@@ -492,6 +491,64 @@ export class MessageDispatcher {
     } catch (error) {
       this.sendServiceError(
         MessageType.REMOVE_MEMBER_RESPONSE,
+        message.requestId,
+        error
+      );
+    }
+  }
+
+  private handleGetGroupMembers(
+    message: GetGroupMembersRequest
+  ): void {
+    const user = this.requireAuthentication(
+      message
+    );
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      const group =
+        this.groupService.getGroup(
+          message.payload.groupId
+        );
+
+      if (!group) {
+        throw new Error(
+          "Grupo não encontrado."
+        );
+      }
+
+      const isMember =
+        this.groupService.isMember(
+          group.id,
+          user.id
+        );
+
+      if (!isMember) {
+        throw new Error(
+          "O usuário não pertence ao grupo."
+        );
+      }
+
+      const members =
+        this.groupService.getMembers(
+          group.id
+        );
+
+      this.client.send({
+        type:
+          MessageType.GET_GROUP_MEMBERS_RESPONSE,
+        requestId: message.requestId,
+        success: true,
+        payload: {
+          members
+        }
+      });
+    } catch (error) {
+      this.sendServiceError(
+        MessageType.GET_GROUP_MEMBERS_RESPONSE,
         message.requestId,
         error
       );
@@ -595,7 +652,7 @@ export class MessageDispatcher {
       };
 
       const userIds = members.map(
-        (member) => member.userId
+        (member) => member.id
       );
 
       this.connectionManager.broadcastToUsers(
