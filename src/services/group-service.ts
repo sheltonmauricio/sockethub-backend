@@ -37,18 +37,10 @@ export class GroupService {
       );
     }
 
-    const group =
-      this.groupRepository.create(
-        normalizedName,
-        ownerId
-      );
-
-    this.groupRepository.addMember(
-      group.id,
+    return this.groupRepository.createWithOwner(
+      normalizedName,
       ownerId
     );
-
-    return group;
   }
 
   getGroup(

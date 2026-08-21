@@ -46,6 +46,46 @@ export class GroupRepository {
     )!;
   }
 
+  createWithOwner(
+    name: string,
+    ownerId: number
+  ): Group {
+    const transaction = database.transaction(() => {
+      const result = database
+        .prepare(`
+          INSERT INTO groups (name, owner_id)
+          VALUES (?, ?)
+        `)
+        .run(name, ownerId);
+
+      const groupId =
+        Number(result.lastInsertRowid);
+
+      database
+        .prepare(`
+          INSERT INTO group_members (
+            group_id,
+            user_id
+          )
+          VALUES (?, ?)
+        `)
+        .run(groupId, ownerId);
+
+      const group =
+        this.findById(groupId);
+
+      if (!group) {
+        throw new Error(
+          "GROUP_CREATION_FAILED"
+        );
+      }
+
+      return group;
+    });
+
+    return transaction();
+  }
+
   findById(
     groupId: number
   ): Group | undefined {

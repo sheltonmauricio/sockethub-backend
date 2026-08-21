@@ -5,6 +5,11 @@ import {
 
 import { GroupRepository } from "../repositories/group-repository.js";
 
+export interface PaginatedMessages {
+  messages: Message[];
+  hasMore: boolean;
+}
+
 export class MessageService {
   constructor(
     private readonly messageRepository: MessageRepository,
@@ -66,7 +71,7 @@ export class MessageService {
     userId: number,
     limit: number,
     offset: number
-  ): Message[] {
+  ): PaginatedMessages {
     const group =
       this.groupRepository.findById(
         groupId
@@ -90,10 +95,21 @@ export class MessageService {
       );
     }
 
-    return this.messageRepository.findByGroup(
-      groupId,
-      limit,
-      offset
-    );
+    const messages =
+      this.messageRepository.findByGroup(
+        groupId,
+        limit + 1,
+        offset
+      );
+
+    const hasMore =
+      messages.length > limit;
+
+    return {
+      messages: hasMore
+        ? messages.slice(0, limit)
+        : messages,
+      hasMore
+    };
   }
 }

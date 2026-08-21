@@ -641,7 +641,7 @@ export class MessageDispatcher {
     }
 
     try {
-      const messages =
+      const result =
         this.messageService.getMessages(
           message.payload.groupId,
           user.id,
@@ -650,7 +650,7 @@ export class MessageDispatcher {
         );
 
       const chatMessages =
-        messages.map((item) => ({
+        result.messages.map((item) => ({
           id: item.id,
           groupId: item.groupId,
           sender: {
@@ -667,9 +667,7 @@ export class MessageDispatcher {
         success: true,
         payload: {
           messages: chatMessages,
-          hasMore:
-            messages.length ===
-            message.payload.limit
+          hasMore: result.hasMore
         }
       });
     } catch (error) {
